@@ -3,54 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline Attendance Pro</title>
+    <title>Attendance Pro - Direct Access</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // உங்களின் Firebase Config விவரங்களை இங்கே இடவும்
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        window.db = db;
+        window.dbRefs = { ref, set, onValue, push };
+    </script>
 </head>
-<body class="bg-gray-100">
+<body class="bg-slate-50">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
         function App() {
-            // LocalStorage-லிருந்து தகவல்களைப் பெறுதல் (Offline Storage)
-            const [students, setStudents] = useState(() => {
-                const saved = localStorage.getItem('offline_students');
-                return saved ? JSON.parse(saved) : [
-                    { id: '1', name: 'மாணவர் 1', roll: '101' },
-                    { id: '2', name: 'மாணவர் 2', roll: '102' }
-                ];
-            });
-
-            const [attendance, setAttendance] = useState(() => {
-                const saved = localStorage.getItem('offline_records');
-                return saved ? JSON.parse(saved) : {};
-            });
-
+            // லோடிங் ஸ்கிரீனைத் தவிர்க்க மாணவர் பட்டியலை ஆரம்பத்திலேயே காலியாக வைக்கிறோம்
+            const [students, setStudents] = useState([]);
+            const [attendance, setAttendance] = useState({});
             const currentDate = new Date().toISOString().split('T')[0];
 
-            // தகவல்கள் மாறும்போது சேமித்தல்
             useEffect(() => {
-                localStorage.setItem('offline_students', JSON.stringify(students));
-                localStorage.setItem('offline_records', JSON.stringify(attendance));
-            }, [students, attendance]);
+                if (!window.db) return;
+                
+                // மாணவர் தரவுகளைப் பெறுதல்
+                const studentRef = window.dbRefs.ref(window.db, 'students');
+                window.dbRefs.onValue(studentRef, (snapshot) => {
+                    const data = snapshot.val();
+                    setStudents(data ? Object.values(data) : []);
+                });
 
-            // வருகை பதிவு செய்தல்
-            const markAttendance = (id, status) => {
-                setAttendance(prev => ({
-                    ...prev,
-                    [currentDate]: { ...prev[currentDate], [id]: status }
-                }));
+                // இன்றைய வருகைப் பதிவைப் பெறுதல்
+                const attRef = window.dbRefs.ref(window.db, 'records/' + currentDate);
+                window.dbRefs.onValue(attRef, (snapshot) => {
+                    setAttendance(snapshot.val() || {});
+                });
+            }, []);
+
+            const handleMark = (id, status) => {
+                const statusRef = window.dbRefs.ref(window.db, `records/${currentDate}/${id}`);
+                window.dbRefs.set(statusRef, status);
             };
 
-            // CSV கோப்பாகப் பதிவிறக்கம் செய்தல் (Offline Download)
             const downloadCSV = () => {
-                const daily = attendance[currentDate] || {};
+                const daily = attendance || {};
                 let csv = '\uFEFFRoll No,Name,Status,Date\n';
-                
                 students.forEach(s => {
                     const status = daily[s.id] === 'P' ? 'Present' : daily[s.id] === 'A' ? 'Absent' : '-';
                     csv += `${s.roll},${s.name},${status},${currentDate}\n`;
@@ -58,58 +74,62 @@
 
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `Attendance_${currentDate}.csv`;
-                link.click();
-                URL.revokeObjectURL(url);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Attendance_${currentDate}.csv`;
+                a.click();
             };
 
             return (
-                <div className="max-w-md mx-auto min-h-screen bg-white shadow-lg">
-                    <div className="bg-blue-600 p-6 text-white text-center">
-                        <h1 className="text-xl font-bold italic">OFFLINE ATTENDANCE</h1>
-                        <p className="text-xs mt-1">இன்டர்நெட் தேவையில்லை</p>
+                <div className="max-w-md mx-auto min-h-screen bg-white shadow-lg flex flex-col">
+                    <div className="bg-indigo-700 p-6 text-white text-center">
+                        <h1 className="text-2xl font-bold">வருகைப் பதிவேடு</h1>
+                        <p className="text-xs opacity-80">{currentDate}</p>
                     </div>
 
-                    <div className="p-4">
-                        <div className="flex justify-between items-center mb-6 bg-gray-50 p-3 rounded-lg border">
-                            <span className="font-bold text-gray-700">{currentDate}</span>
-                            <button 
-                                onClick={downloadCSV}
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md active:scale-95"
-                            >
-                                SAVE CSV
-                            </button>
-                        </div>
+                    <div className="p-4 flex-1">
+                        <button 
+                            onClick={downloadCSV}
+                            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 shadow-md active:scale-95 transition-transform"
+                        >
+                            SAVE CSV FILE
+                        </button>
 
                         <div className="space-y-4">
-                            {students.map(s => (
-                                <div key={s.id} className="p-4 border-2 rounded-xl">
-                                    <p className="font-bold text-gray-800 mb-2">{s.name} ({s.roll})</p>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => markAttendance(s.id, 'P')}
-                                            className={`flex-1 py-2 rounded-lg font-bold border ${attendance[currentDate]?.[s.id] === 'P' ? 'bg-green-500 text-white' : 'text-gray-400'}`}
-                                        >
-                                            PRESENT
-                                        </button>
-                                        <button 
-                                            onClick={() => markAttendance(s.id, 'A')}
-                                            className={`flex-1 py-2 rounded-lg font-bold border ${attendance[currentDate]?.[s.id] === 'A' ? 'bg-red-500 text-white' : 'text-gray-400'}`}
-                                        >
-                                            ABSENT
-                                        </button>
+                            {students.length === 0 ? (
+                                <p className="text-center text-gray-400 mt-10 italic">மாணவர்கள் பட்டியல் தயாராகிறது...</p>
+                            ) : (
+                                students.map(s => (
+                                    <div key={s.id} className="border p-4 rounded-2xl shadow-sm border-gray-100">
+                                        <div className="mb-3">
+                                            <p className="font-bold text-gray-800">{s.name}</p>
+                                            <p className="text-xs text-indigo-500 font-semibold">Roll: {s.roll}</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => handleMark(s.id, 'P')}
+                                                className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${attendance[s.id] === 'P' ? 'bg-green-500 border-green-600 text-white shadow-md' : 'text-gray-300 border-gray-50'}`}
+                                            >
+                                                PRESENT
+                                            </button>
+                                            <button 
+                                                onClick={() => handleMark(s.id, 'A')}
+                                                className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${attendance[s.id] === 'A' ? 'bg-red-500 border-red-600 text-white shadow-md' : 'text-gray-300 border-gray-50'}`}
+                                            >
+                                                ABSENT
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
             );
         }
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
