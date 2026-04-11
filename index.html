@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Pro - Cloud Sync</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // 🔥 உங்களின் Firebase Config விவரங்களை இங்கே மாற்றவும்
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        window.db = db; // React-ல் பயன்படுத்த
+        window.dbRefs = { ref, set, onValue, push };
+    </script>
+</head>
+<body class="bg-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [students, setStudents] = useState([]);
+            const [attendance, setAttendance] = useState({});
+            const [loading, setLoading] = useState(true);
+            const currentDate = new Date().toISOString().split('T')[0];
+
+            // Firebase-லிருந்து தரவுகளைப் பெறுதல்
+            useEffect(() => {
+                if (!window.db) return;
+                
+                const studentRef = window.dbRefs.ref(window.db, 'students');
+                window.dbRefs.onValue(studentRef, (snapshot) => {
+                    const data = snapshot.val();
+                    const list = data ? Object.values(data) : [];
+                    setStudents(list);
+                    setLoading(false);
+                });
+
+                const attRef = window.dbRefs.ref(window.db, 'records/' + currentDate);
+                window.dbRefs.onValue(attRef, (snapshot) => {
+                    setAttendance(snapshot.val() || {});
+                });
+            }, []);
+
+            // வருகையைப் பதிவு செய்தல் (Cloud Save)
+            const handleMark = (id, status) => {
+                const statusRef = window.dbRefs.ref(window.db, `records/${currentDate}/${id}`);
+                window.dbRefs.set(statusRef, status);
+            };
+
+            // புதிய மாணவரைச் சேர்த்தல்
+            const addStudent = (name, roll) => {
+                const newRef = window.dbRefs.push(window.dbRefs.ref(window.db, 'students'));
+                window.dbRefs.set(newRef, { id: newRef.key, name, roll });
+            };
+
+            if (loading) return <div className="text-center mt-20 font-bold">இணைக்கப் படுகிறது (Connecting)...</div>;
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen bg-white shadow-xl">
+                    <div className="bg-indigo-700 p-6 text-white text-center shadow-lg">
+                        <h1 className="text-2xl font-bold">Attendance Cloud Pro</h1>
+                        <p className="text-xs opacity-70 mt-1">Live Database Connected</p>
+                    </div>
+
+                    <div className="p-4">
+                        <div className="bg-blue-50 p-3 rounded-xl mb-6 text-center border border-blue-100">
+                            <span className="text-blue-700 font-bold">தேதி: {currentDate}</span>
+                        </div>
+
+                        <div className="space-y-4">
+                            {students.length === 0 && <p className="text-center text-gray-400">மாணவர்கள் இல்லை.</p>}
+                            {students.map(s => (
+                                <div key={s.id} className="border p-4 rounded-2xl bg-white shadow-sm border-gray-100">
+                                    <div className="mb-3">
+                                        <p className="font-bold text-gray-800">{s.name}</p>
+                                        <p className="text-xs text-gray-400">Roll: {s.roll}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => handleMark(s.id, 'P')}
+                                            className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${attendance[s.id] === 'P' ? 'bg-green-500 border-green-600 text-white' : 'text-gray-300 border-gray-50'}`}
+                                        >
+                                            PRESENT
+                                        </button>
+                                        <button 
+                                            onClick={() => handleMark(s.id, 'A')}
+                                            className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${attendance[s.id] === 'A' ? 'bg-red-500 border-red-600 text-white' : 'text-gray-300 border-gray-50'}`}
+                                        >
+                                            ABSENT
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
