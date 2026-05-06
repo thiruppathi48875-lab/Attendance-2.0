@@ -3,122 +3,270 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance Pro - Cloud Sync</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    <title>Labor Attendance</title>
+    <style>
+        :root { --primary: #111827; --blue: #2563eb; --green: #16a34a; --red: #dc2626; --bg: #f3f4f6; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; display: flex; justify-content: center; padding-bottom: 80px; }
+        .container { width: 100%; max-width: 450px; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        .top-bar { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px; }
+        .header { text-align: center; margin-bottom: 15px; }
+        .header h2 { margin: 0; font-size: 1.5rem; color: var(--primary); }
+        .header p { margin: 5px 0; color: #6b7280; font-size: 0.9rem; }
+        
+        .clock-box { background: var(--primary); color: white; padding: 10px; border-radius: 10px; text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 0.9rem; }
 
-        // 🔥 உங்களின் Firebase Config விவரங்களை இங்கே மாற்றவும்
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "YOUR_ID",
-            appId: "YOUR_APP_ID"
+        .mistry-section { background: #eff6ff; padding: 15px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #bfdbfe; }
+        .mistry-item { display: flex; justify-content: space-between; background: white; padding: 8px; border-radius: 8px; margin-top: 5px; border: 1px solid #e5e7eb; }
+        
+        .form-group { background: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 15px; margin-bottom: 20px; }
+        input, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box; }
+        
+        .save-btn { background: var(--blue); color: white; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+        .card { border: 1px solid #e5e7eb; padding: 15px; border-radius: 15px; margin-bottom: 12px; background: #fff; position: relative; }
+        .edit-icon { position: absolute; top: 15px; right: 15px; color: var(--blue); cursor: pointer; font-size: 0.85rem; font-weight: bold; text-decoration: underline; }
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+        .atd-btn { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font-weight: bold; cursor: pointer; }
+        .p-active { background: var(--green) !important; color: white; border: none; }
+        .a-active { background: var(--red) !important; color: white; border: none; }
+
+        /* Master Submit Button */
+        .submit-container { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 10px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; justify-content: center; z-index: 1000; }
+        .master-submit { width: 100%; max-width: 430px; background: var(--primary); color: white; border: none; padding: 16px; border-radius: 15px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+        .master-submit:disabled { background: #9ca3af; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="top-bar">
+        <label style="font-size: 0.8rem; font-weight: bold;">மொழி:</label>
+        <select id="langSelect" onchange="changeLang(this.value)" style="width: auto; padding: 4px; margin-left: 5px;">
+            <option value="ta">தமிழ்</option>
+            <option value="en">English</option>
+        </select>
+    </div>
+
+    <div class="header">
+        <h2 id="t-app">வருகைப் பதிவேடு</h2>
+        <p id="t-file">கோப்பு: Labour attendance</p>
+    </div>
+
+    <div class="clock-box" id="clock">Loading...</div>
+
+    <div class="mistry-section">
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="mistryInput" placeholder="புதிய மேஸ்திரி பெயர்..." style="margin-bottom:0;">
+            <button onclick="addMistry()" style="width:80px; background:var(--blue); color:white; border:none; border-radius:10px; cursor:pointer;">Add</button>
+        </div>
+        <div id="mistryList" style="margin-top:10px;"></div>
+        <label style="display:block; margin-top:10px; font-size:0.8rem; font-weight:bold;">மேஸ்திரி தேர்வு (Select Mistry):</label>
+        <select id="activeMistry" onchange="syncFromSheet()"></select>
+    </div>
+
+    <div class="form-group">
+        <input type="hidden" id="edit-index" value="-1">
+        <input type="number" id="inp-sno" placeholder="வரிசை எண் (S.No)">
+        <input type="text" id="inp-name" placeholder="தொழிலாளி பெயர்">
+        <input type="text" id="inp-phone" placeholder="தொலைபேசி எண்">
+        <input type="text" id="inp-addr" placeholder="முகவரி">
+        <select id="inp-gen">
+            <option value="">பாலினம் தேர்வு செய்க</option>
+            <option value="Male">ஆண் (Male)</option>
+            <option value="Female">பெண் (Female)</option>
+        </select>
+        <button class="save-btn" onclick="saveLocal()">
+            <span id="t-save">விபரங்களைச் சேமி</span> ☁️
+        </button>
+    </div>
+
+    <div id="laborDisplay"></div>
+</div>
+
+<!-- Last Submit Button -->
+<div class="submit-container">
+    <button id="finalSubmit" class="master-submit" onclick="submitAllAttendance()" disabled>
+        Submit All Attendance ☁️
+    </button>
+</div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzO13lOpnce8BsOzdy8HrBfODP1cHOg6Tjp22k4p_JyrgD7K6G_W_Ds-7MwohnmV2k/exec";
+    let labors = [];
+
+    setInterval(() => {
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        document.getElementById('clock').innerText = now.toLocaleString('ta-IN', options);
+    }, 1000);
+
+    function addMistry() {
+        let name = document.getElementById('mistryInput').value.trim();
+        if(!name) return;
+        let list = JSON.parse(localStorage.getItem('mistryData')) || [];
+        if(!list.includes(name)) list.push(name);
+        localStorage.setItem('mistryData', JSON.stringify(list));
+        document.getElementById('mistryInput').value = "";
+        refreshMistryUI();
+    }
+
+    function removeMistry(n) {
+        let list = JSON.parse(localStorage.getItem('mistryData')) || [];
+        list = list.filter(m => m !== n);
+        localStorage.setItem('mistryData', JSON.stringify(list));
+        refreshMistryUI();
+    }
+
+    function refreshMistryUI() {
+        let list = JSON.parse(localStorage.getItem('mistryData')) || [];
+        let listDiv = document.getElementById('mistryList');
+        let select = document.getElementById('activeMistry');
+        listDiv.innerHTML = "";
+        select.innerHTML = '<option value="">-- தேர்வு செய்க --</option>';
+        list.forEach(n => {
+            listDiv.innerHTML += `<div class="mistry-item"><span>${n}</span><span style="color:red; cursor:pointer;" onclick="removeMistry('${n}')">🗑️</span></div>`;
+            select.innerHTML += `<option value="${n}">${n}</option>`;
+        });
+    }
+
+    async function syncFromSheet() {
+        let m = document.getElementById('activeMistry').value;
+        if(!m) return;
+        try {
+            const res = await fetch(`${API_URL}?sheet=${m}`);
+            const data = await res.json();
+            // Initialize status and salary
+            labors = data.map(l => ({...l, status: '', tempSalary: ''}));
+            render();
+        } catch(e) { console.log("Sync Error"); }
+    }
+
+    function saveLocal() {
+        const index = document.getElementById('edit-index').value;
+        const data = {
+            sNo: document.getElementById('inp-sno').value,
+            name: document.getElementById('inp-name').value,
+            phone: document.getElementById('inp-phone').value,
+            address: document.getElementById('inp-addr').value,
+            gender: document.getElementById('inp-gen').value,
+            status: '',
+            tempSalary: ''
         };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        window.db = db; // React-ல் பயன்படுத்த
-        window.dbRefs = { ref, set, onValue, push };
-    </script>
-</head>
-<body class="bg-slate-100">
-    <div id="root"></div>
+        if(!data.name) return;
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-
-        function App() {
-            const [students, setStudents] = useState([]);
-            const [attendance, setAttendance] = useState({});
-            const [loading, setLoading] = useState(true);
-            const currentDate = new Date().toISOString().split('T')[0];
-
-            // Firebase-லிருந்து தரவுகளைப் பெறுதல்
-            useEffect(() => {
-                if (!window.db) return;
-                
-                const studentRef = window.dbRefs.ref(window.db, 'students');
-                window.dbRefs.onValue(studentRef, (snapshot) => {
-                    const data = snapshot.val();
-                    const list = data ? Object.values(data) : [];
-                    setStudents(list);
-                    setLoading(false);
-                });
-
-                const attRef = window.dbRefs.ref(window.db, 'records/' + currentDate);
-                window.dbRefs.onValue(attRef, (snapshot) => {
-                    setAttendance(snapshot.val() || {});
-                });
-            }, []);
-
-            // வருகையைப் பதிவு செய்தல் (Cloud Save)
-            const handleMark = (id, status) => {
-                const statusRef = window.dbRefs.ref(window.db, `records/${currentDate}/${id}`);
-                window.dbRefs.set(statusRef, status);
-            };
-
-            // புதிய மாணவரைச் சேர்த்தல்
-            const addStudent = (name, roll) => {
-                const newRef = window.dbRefs.push(window.dbRefs.ref(window.db, 'students'));
-                window.dbRefs.set(newRef, { id: newRef.key, name, roll });
-            };
-
-            if (loading) return <div className="text-center mt-20 font-bold">இணைக்கப் படுகிறது (Connecting)...</div>;
-
-            return (
-                <div className="max-w-md mx-auto min-h-screen bg-white shadow-xl">
-                    <div className="bg-indigo-700 p-6 text-white text-center shadow-lg">
-                        <h1 className="text-2xl font-bold">Attendance Cloud Pro</h1>
-                        <p className="text-xs opacity-70 mt-1">Live Database Connected</p>
-                    </div>
-
-                    <div className="p-4">
-                        <div className="bg-blue-50 p-3 rounded-xl mb-6 text-center border border-blue-100">
-                            <span className="text-blue-700 font-bold">தேதி: {currentDate}</span>
-                        </div>
-
-                        <div className="space-y-4">
-                            {students.length === 0 && <p className="text-center text-gray-400">மாணவர்கள் இல்லை.</p>}
-                            {students.map(s => (
-                                <div key={s.id} className="border p-4 rounded-2xl bg-white shadow-sm border-gray-100">
-                                    <div className="mb-3">
-                                        <p className="font-bold text-gray-800">{s.name}</p>
-                                        <p className="text-xs text-gray-400">Roll: {s.roll}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => handleMark(s.id, 'P')}
-                                            className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${attendance[s.id] === 'P' ? 'bg-green-500 border-green-600 text-white' : 'text-gray-300 border-gray-50'}`}
-                                        >
-                                            PRESENT
-                                        </button>
-                                        <button 
-                                            onClick={() => handleMark(s.id, 'A')}
-                                            className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${attendance[s.id] === 'A' ? 'bg-red-500 border-red-600 text-white' : 'text-gray-300 border-gray-50'}`}
-                                        >
-                                            ABSENT
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
+        if (index === "-1") {
+            labors.push(data);
+        } else {
+            labors[index] = {...labors[index], ...data};
+            document.getElementById('edit-index').value = "-1";
+            document.getElementById('t-save').innerText = document.getElementById('langSelect').value === 'en' ? "Save to Cloud" : "விபரங்களைச் சேமி";
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+        render();
+        document.querySelectorAll('.form-group input:not([type="hidden"]), .form-group select').forEach(i => i.value = "");
+    }
+
+    function editLabor(i) {
+        const labor = labors[i];
+        document.getElementById('edit-index').value = i;
+        document.getElementById('inp-sno').value = labor.sNo;
+        document.getElementById('inp-name').value = labor.name;
+        document.getElementById('inp-phone').value = labor.phone;
+        document.getElementById('inp-addr').value = labor.address;
+        document.getElementById('inp-gen').value = labor.gender;
+        document.getElementById('t-save').innerText = document.getElementById('langSelect').value === 'en' ? "Update Info" : "மாற்றங்களைச் சேமி";
+        window.scrollTo({ top: 100, behavior: 'smooth' });
+    }
+
+    function render() {
+        const container = document.getElementById('laborDisplay');
+        const lang = document.getElementById('langSelect').value;
+        container.innerHTML = labors.map((l, i) => `
+            <div class="card">
+                <span class="edit-icon" onclick="editLabor(${i})">${lang === 'en' ? 'Edit' : 'திருத்து'}</span>
+                <div style="font-weight:bold;">${l.sNo ? l.sNo + '. ' : ''}${l.name}</div>
+                <div style="font-size:0.85rem; color:#6b7280;">📞 ${l.phone} | 📍 ${l.address} | ⚥ ${l.gender}</div>
+                <input type="number" id="sal-${i}" value="${l.tempSalary}" placeholder="சம்பளம் (Salary)" style="margin-top:10px;" oninput="updateTempSalary(${i}, this.value)">
+                <div class="btn-row">
+                    <button class="atd-btn ${l.status === 'Present' ? 'p-active' : ''}" onclick="markAtd(${i}, 'Present')">${lang === 'en' ? 'Present' : 'வந்தவர்'}</button>
+                    <button class="atd-btn ${l.status === 'Absent' ? 'a-active' : ''}" onclick="markAtd(${i}, 'Absent')">${lang === 'en' ? 'Absent' : 'வாராதவர்'}</button>
+                </div>
+            </div>
+        `).join('');
+        checkSelection();
+    }
+
+    function updateTempSalary(i, val) {
+        labors[i].tempSalary = val;
+    }
+
+    function markAtd(i, status) {
+        labors[i].status = status;
+        render();
+    }
+
+    function checkSelection() {
+        // Enable submit button only if at least one person has a status
+        const selected = labors.some(l => l.status !== '');
+        document.getElementById('finalSubmit').disabled = !selected;
+    }
+
+    async function submitAllAttendance() {
+        let mistry = document.getElementById('activeMistry').value;
+        if(!mistry) return alert("மேஸ்திரி தேர்வு செய்யப்படவில்லை!");
+
+        const btn = document.getElementById('finalSubmit');
+        const originalText = btn.innerText;
+        btn.innerText = "Sending... ⏳";
+        btn.disabled = true;
+
+        const selectedLabors = labors.filter(l => l.status !== '');
+        const date = new Date().toLocaleDateString('en-GB');
+        const time = new Date().toLocaleTimeString();
+        const day = new Date().toLocaleDateString('ta-IN', {weekday: 'long'});
+
+        // Sequential submission to avoid script issues
+        for (let labor of selectedLabors) {
+            const payload = {
+                sNo: labor.sNo,
+                name: labor.name,
+                phone: labor.phone,
+                address: labor.address,
+                gender: labor.gender,
+                status: labor.status,
+                salary: labor.tempSalary,
+                recordedBy: mistry,
+                date: date,
+                time: time,
+                day: day
+            };
+            await fetch(API_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        }
+
+        alert("அனைத்து வருகைப் பதிவுகளும் வெற்றிகரமாகச் சேமிக்கப்பட்டன!");
+        btn.innerText = originalText;
+        // Reset statuses
+        labors.forEach(l => { l.status = ''; l.tempSalary = ''; });
+        render();
+    }
+
+    function changeLang(lang) {
+        const isEn = lang === 'en';
+        document.getElementById('t-app').innerText = isEn ? "Labour Attendance" : "வருகைப் பதிவேடு";
+        document.getElementById('t-file').innerText = isEn ? "File: Labour attendance" : "கோப்பு: Labour attendance";
+        document.getElementById('finalSubmit').innerText = isEn ? "Submit All Attendance ☁️" : "அனைத்தையும் சமர்ப்பி ☁️";
+        
+        const saveBtnText = document.getElementById('edit-index').value === "-1" 
+            ? (isEn ? "Save to Cloud" : "விபரங்களைச் சேமி")
+            : (isEn ? "Update Info" : "மாற்றங்களைச் சேமி");
+        
+        document.getElementById('t-save').innerText = saveBtnText;
+        render();
+    }
+
+    window.onload = refreshMistryUI;
+</script>
 </body>
 </html>
