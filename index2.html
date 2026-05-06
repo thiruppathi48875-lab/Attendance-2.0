@@ -1,1 +1,50 @@
+<!-- ... (மேலே உள்ள CSS மற்றும் HTML பகுதிகள் அப்படியே இருக்கும்) ... -->
 
+<script>
+    // உங்கள் Apps Script URL-ஐ கீழே உள்ள மேற்கோள் குறிகளுக்குள் போடவும்
+    const API_URL = "இங்கே_உங்கள்_WEB_APP_URL_ஐ_போடவும்"; 
+    let labors = [];
+
+    // ... (மற்ற அனைத்து செயல்பாடுகளும் நீங்கள் கொடுத்த குறியீட்டின் படி தொடரும்) ...
+
+    async function submitAllAttendance() {
+        let mistry = document.getElementById('activeMistry').value;
+        if(!mistry) return alert("மேஸ்திரி தேர்வு செய்யவும்!");
+
+        const btn = document.getElementById('finalSubmit');
+        btn.innerText = "Processing...";
+        btn.disabled = true;
+
+        const markedLabors = labors.filter(l => l.status !== '');
+
+        for (let labor of markedLabors) {
+            const payload = {
+                sNo: labor.sNo,
+                name: labor.name,
+                phone: labor.phone,
+                address: labor.address,
+                gender: labor.gender,
+                salary: labor.salary,
+                status: labor.status,
+                recordedBy: mistry,
+                date: new Date().toLocaleDateString('en-GB')
+            };
+
+            try {
+                // இது உங்கள் கூகுள் ஷீட்டிற்குத் தரவுகளை அனுப்பும்
+                await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+            } catch(e) { console.error("Error:", labor.name); }
+        }
+
+        alert("அனைத்து விவரங்களும் கூகுள் ஷீட்டில் சேமிக்கப்பட்டன!");
+        btn.innerText = document.getElementById('langSelect').value === 'en' ? "Submit All to Cloud ☁️" : "விவரங்களைச் சேமிக்கவும் ☁️";
+        btn.disabled = false;
+        labors.forEach(l => l.status = '');
+        render();
+    }
+    // ...
+</script>
